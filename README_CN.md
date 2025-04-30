@@ -63,23 +63,15 @@
 ## 使用方法
 
 1. 启动 ComfyUI 并创建新的工作流。
-2. 添加 "Step1X-Edit Model Loader"（Step1X-Edit 模型加载器）节点到工作流中。
+2. 添加 "Step1X-Edit Model Loader" 节点到工作流中。
 3. 配置模型参数：
     - 选择 `step1x-edit-i1258-FP8.safetensors` 作为扩散模型
     - 选择 `vae.safetensors` 作为 VAE
-    - 设置 "Qwen2.5-VL-7B-Instruct" 作为文本编码器
-    - 根据需要设置其他参数（dtype、quantized、offload）
-4. 连接 "Step1X-Edit Generate"（Step1X-Edit 生成）节点到模型节点。
+    - 设置 `Qwen2.5-VL-7B-Instruct` 作为文本编码器
+    - 根据需要设置其他参数（`dtype`、`quantized`、`offload`）
+4. 连接 "Step1X-Edit Generate" 节点到模型节点。
 5. 提供输入图像和编辑提示。
 6. 运行工作流生成编辑后的图像。
-
-## 工作流示例
-
-以下是一个简单的工作流示例：
-
-1. Load Image（加载图像）→ Step1X-Edit Generate（Step1X-Edit 生成）
-2. Step1X-Edit Model Loader（Step1X-Edit 模型加载器）→ Step1X-Edit Generate（Step1X-Edit 生成）
-3. Step1X-Edit Generate（Step1X-Edit 生成）→ Preview Image（预览图像）
 
 ## 参数说明
 

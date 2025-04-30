@@ -66,19 +66,11 @@ You can find the example workflow in the [examples directory](examples/step1x_ed
 3. Configure the model parameters:
    - Select `step1x-edit-i1258-FP8.safetensors` as the diffusion model
    - Select `vae.safetensors` as the VAE
-   - Set "Qwen2.5-VL-7B-Instruct" as the text encoder
-   - Set additional parameters (dtype, quantized, offload) as needed
+   - Set `Qwen2.5-VL-7B-Instruct` as the text encoder
+   - Set additional parameters (`dtype`, `quantized`, `offload`) as needed
 4. Connect an "Step1X-Edit Generate" node to the model node.
 5. Provide an input image and an editing prompt.
 6. Run the workflow to generate edited images.
-
-## Example Workflow
-
-Here's a simple example workflow:
-
-1. Load Image → Step1X-Edit Generate
-2. Step1X-Edit Model Loader → Step1X-Edit Generate
-3. Step1X-Edit Generate → Preview Image
 
 ## Parameters
 
