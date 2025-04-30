@@ -1,0 +1,196 @@
+{
+  "last_node_id": 10,
+  "last_link_id": 17,
+  "nodes": [
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [
+        745.9241333007812,
+        676.44091796875
+      ],
+      "size": [
+        210,
+        299.4796447753906
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            15
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "0001.png",
+        "image"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "PreviewImage",
+      "pos": [
+        961.9817504882812,
+        358.0769958496094
+      ],
+      "size": [
+        397.47607421875,
+        618.7960815429688
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 17
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 9,
+      "type": "Step1XEditGenerate",
+      "pos": [
+        745.9320068359375,
+        358.9280700683594
+      ],
+      "size": [
+        210,
+        282
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model_bundle",
+          "type": "STEP1X_MODEL_BUNDLE",
+          "link": 16
+        },
+        {
+          "name": "input_image",
+          "type": "IMAGE",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            17
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Step1XEditGenerate"
+      },
+      "widgets_values": [
+        "让她哭。",
+        "",
+        10,
+        6,
+        318,
+        "randomize",
+        768
+      ]
+    },
+    {
+      "id": 10,
+      "type": "Step1XEditModelLoader",
+      "pos": [
+        744.1864624023438,
+        127.32762908935547
+      ],
+      "size": [
+        617.0538330078125,
+        198.91787719726562
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STEP1X_MODEL_BUNDLE",
+          "type": "STEP1X_MODEL_BUNDLE",
+          "links": [
+            16
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Step1XEditModelLoader"
+      },
+      "widgets_values": [
+        "step1x-edit-i1258-FP8.safetensors",
+        "vae.safetensors",
+        "Qwen2.5-VL-7B-Instruct",
+        "bfloat16",
+        true,
+        false
+      ]
+    }
+  ],
+  "links": [
+    [
+      15,
+      2,
+      0,
+      9,
+      1,
+      "IMAGE"
+    ],
+    [
+      16,
+      10,
+      0,
+      9,
+      0,
+      "STEP1X_MODEL_BUNDLE"
+    ],
+    [
+      17,
+      9,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7283845674106205,
+      "offset": [
+        -159.39467322432967,
+        -30.630752842927603
+      ]
+    }
+  },
+  "version": 0.4
+}
