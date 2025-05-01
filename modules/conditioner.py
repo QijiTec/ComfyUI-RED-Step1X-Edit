@@ -70,12 +70,12 @@ class Qwen25VL_7b_Embedder(torch.nn.Module):
         self.dtype = dtype
         self.device = device
 
-        print(f"Qwen25VL model run on current device: {torch.cuda.current_device()}")
+        print(f"Qwen25VL model run on current device: {self.device}")
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype=dtype,
             attn_implementation="flash_attention_2"
-        ).to(torch.cuda.current_device())
+        ).to(self.device)
 
         self.model.requires_grad_(False)
         self.processor = AutoProcessor.from_pretrained(
