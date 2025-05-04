@@ -1,21 +1,8 @@
 import torch
 from .step1x_edit_utils import load_state_dict
-
-
-# Try to import Step1X-Edit modules
-try:
-    from ..modules.autoencoder import AutoEncoder
-    from ..modules.conditioner import Qwen25VL_7b_Embedder as Qwen2VLEmbedder
-    from ..modules.model_edit import Step1XParams, Step1XEdit
-
-except ImportError:
-    print("Warning: Could not import Step1X-Edit modules. Will attempt to load them dynamically.")
-
-    # Define placeholders for the modules
-    AutoEncoder = None
-    Qwen2VLEmbedder = None
-    Step1XParams = None
-    Step1XEdit = None
+from ..modules.autoencoder import AutoEncoder
+from ..modules.conditioner import Qwen25VL_7b_Embedder as Qwen2VLEmbedder
+from ..modules.model_edit import Step1XParams, Step1XEdit
 
 
 class Step1XEditModelBundle:
