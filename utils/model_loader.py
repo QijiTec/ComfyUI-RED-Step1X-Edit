@@ -8,12 +8,13 @@ from ..modules.model_edit import Step1XParams, Step1XEdit
 class Step1XEditModelBundle:
     """Bundle containing all components of the Step1X-Edit model."""
 
-    def __init__(self, ae=None, dit=None, llm_encoder=None, device="cuda", dtype=torch.bfloat16):
+    def __init__(self, ae=None, dit=None, llm_encoder=None, device="cuda", dtype=torch.bfloat16, attention_mode="flash"):
         self.ae = ae
         self.dit = dit
         self.llm_encoder = llm_encoder
         self.device = device
         self.dtype = dtype
+        self.attention_mode = attention_mode
         self.quantized = False
         self.offload = False
 
@@ -61,7 +62,7 @@ class Step1XEditModelBundle:
                 theta=10_000,
                 qkv_bias=True,
             )
-            self.dit = Step1XEdit(step1x_params)
+            self.dit = Step1XEdit(step1x_params, attention_mode=self.attention_mode)
 
         # Load weights
         self.ae = load_state_dict(self.ae, ae_path, 'cpu')

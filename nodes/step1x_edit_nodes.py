@@ -11,7 +11,7 @@ from ..utils.sampling import get_schedule
 import folder_paths
 
 
-class Step1XEditModelLoader:
+class REDStep1XEditModelLoader:
     """Node for loading the Step1X-Edit model."""
 
     @classmethod
@@ -19,20 +19,20 @@ class Step1XEditModelLoader:
         return {
             "required": {
                 "diffusion_model": (folder_paths.get_filename_list("diffusion_models"), {"default": "step1x-edit-i1258-FP8.safetensors"}),
-                "vae": (folder_paths.get_filename_list("vae"), {"default": "vae.safetensors"}),
+                "vae": (folder_paths.get_filename_list("vae"), {"default": "ae.safetensors"}),
                 "text_encoder": (os.listdir(folder_paths.get_folder_paths("text_encoders")[0]), {"default": "Qwen2.5-VL-7B-Instruct"}),
                 "dtype": (["bfloat16", "float16", "float32"], {"default": "bfloat16"}),
+                "attention_mode": (["flash-attn", "torch-sdpa", "vanilla"], {"default": "torch-sdpa"}),
                 "quantized": ("BOOLEAN", {"default": True}),
                 "offload": ("BOOLEAN", {"default": False})
             }
         }
 
-    RETURN_TYPES = ("MODEL",)
-    RETURN_NAMES = ("model",)
+    RETURN_TYPES = ("STEP1X_MODEL_BUNDLE",)
     FUNCTION = "load_model"
     CATEGORY = "Step1X-Edit"
 
-    def load_model(self, diffusion_model, vae, text_encoder, dtype, quantized, offload):
+    def load_model(self, diffusion_model, vae, text_encoder, dtype, attention_mode, quantized, offload):
         """Load the Step1X-Edit model components."""
         dit_path = folder_paths.get_full_path("diffusion_models", diffusion_model)
         ae_path = folder_paths.get_full_path("vae", vae)
@@ -50,12 +50,12 @@ class Step1XEditModelLoader:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # Create model bundle
-        model = Step1XEditModelBundle(device=device, dtype=torch_dtype)
-        model.set_quantized(quantized)
-        model.set_offload(offload)
+        model_bundle = Step1XEditModelBundle(device=device, dtype=torch_dtype, attention_mode=attention_mode)
+        model_bundle.set_quantized(quantized)
+        model_bundle.set_offload(offload)
 
         # Load models
-        success = model.load_models(
+        success = model_bundle.load_models(
             dit_path=dit_path,
             ae_path=ae_path,
             qwen2vl_model_path=qwen2vl_model_path,
@@ -65,17 +65,17 @@ class Step1XEditModelLoader:
         if not success:
             raise RuntimeError("Failed to load Step1X-Edit models. Please check paths and ensure all dependencies are installed.")
 
-        return (model,)
+        return (model_bundle,)
 
 
-class Step1XEditGenerateNode:
+class REDStep1XEditGenerateNode:
     """Node for generating images using Step1X-Edit."""
 
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": ("MODEL",),
+                "model_bundle": ("STEP1X_MODEL_BUNDLE",),
                 "input_image": ("IMAGE",),
                 "prompt": ("STRING", {"multiline": True}),
                 "negative_prompt": ("STRING", {"multiline": True, "default": ""}),
@@ -87,7 +87,6 @@ class Step1XEditGenerateNode:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("image",)
     FUNCTION = "generate"
     CATEGORY = "Step1X-Edit"
 
@@ -110,7 +109,7 @@ class Step1XEditGenerateNode:
             pw=2,
         )
 
-    def prepare(self, prompt, img, ref_image, ref_image_raw, model, device):
+    def prepare(self, prompt, img, ref_image, ref_image_raw, model_bundle, device):
         bs, _, h, w = img.shape
         bs, _, ref_h, ref_w = ref_image.shape
 
@@ -140,11 +139,11 @@ class Step1XEditGenerateNode:
         if isinstance(prompt, str):
             prompt = [prompt]
 
-        llm_encoder = model.llm_encoder
-        if model.offload:
+        llm_encoder = model_bundle.llm_encoder
+        if model_bundle.offload:
             llm_encoder = llm_encoder.to(device)
         txt, mask = llm_encoder(prompt, ref_image_raw)
-        if model.offload:
+        if model_bundle.offload:
             llm_encoder = llm_encoder.cpu()
             self.cudagc()
 
@@ -165,10 +164,10 @@ class Step1XEditGenerateNode:
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
 
-    def denoise(self, model, img, img_ids, llm_embedding, txt_ids, timesteps, cfg_guidance=4.5, mask=None, timesteps_truncate=1.0):
+    def denoise(self, model_bundle, img, img_ids, llm_embedding, txt_ids, timesteps, cfg_guidance=4.5, mask=None, timesteps_truncate=1.0):
         device = img.device
-        dit = model.dit
-        if model.offload:
+        dit = model_bundle.dit
+        if model_bundle.offload:
             dit = dit.to(device)
 
         for t_curr, t_prev in itertools.pairwise(timesteps):
@@ -212,7 +211,7 @@ class Step1XEditGenerateNode:
                 ], dim=1
             )
 
-        if model.offload:
+        if model_bundle.offload:
             dit = dit.cpu()
             self.cudagc()
 
@@ -240,7 +239,7 @@ class Step1XEditGenerateNode:
         return img_resized, img.size
 
     @torch.inference_mode()
-    def generate(self, model, input_image, prompt, negative_prompt, num_steps, cfg_guidance, seed, size_level):
+    def generate(self, model_bundle, input_image, prompt, negative_prompt, num_steps, cfg_guidance, seed, size_level):
         # ComfyUI passes images in BHWC format [batch, height, width, channels] with values in range [0, 1]
         # Convert to BCHW format for processing
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -263,14 +262,14 @@ class Step1XEditGenerateNode:
             ref_img_tensor = F.to_tensor(ref_img_pil).unsqueeze(0).to(device) * 2 - 1
 
             # Get autoencoder from model bundle
-            ae = model.ae
-            if model.offload:
+            ae = model_bundle.ae
+            if model_bundle.offload:
                 ae = ae.to(device)
 
             # Encode the image
             ref_images = ae.encode(ref_img_tensor)
 
-            if model.offload:
+            if model_bundle.offload:
                 ae = ae.cpu()
                 self.cudagc()
 
@@ -286,7 +285,7 @@ class Step1XEditGenerateNode:
                 height // 8,
                 width // 8,
                 device=device,
-                dtype=torch.bfloat16 if model.dtype == torch.bfloat16 else torch.float32,
+                dtype=torch.bfloat16 if model_bundle.dtype == torch.bfloat16 else torch.float32,
                 generator=torch.Generator(device=device).manual_seed(seed_value),
             )
 
@@ -301,12 +300,12 @@ class Step1XEditGenerateNode:
             ref_img_tensor = torch.cat([ref_img_tensor, ref_img_tensor], dim=0)
 
             # Prepare inputs
-            inputs = self.prepare([prompt, negative_prompt], x, ref_image=ref_images, ref_image_raw=ref_img_tensor, model=model, device=device)
+            inputs = self.prepare([prompt, negative_prompt], x, ref_image=ref_images, ref_image_raw=ref_img_tensor, model_bundle=model_bundle, device=device)
 
             # Denoise
             with torch.autocast(device_type=device, dtype=torch.bfloat16):
                 x = self.denoise(
-                    model=model,
+                    model_bundle=model_bundle,
                     **inputs,
                     cfg_guidance=cfg_guidance,
                     timesteps=timesteps,
@@ -315,10 +314,10 @@ class Step1XEditGenerateNode:
 
                 # Unpack and decode
                 x = self.unpack(x.float(), height, width)
-                if model.offload:
-                    ae = model.ae.to(device)
+                if model_bundle.offload:
+                    ae = model_bundle.ae.to(device)
                 x = ae.decode(x)
-                if model.offload:
+                if model_bundle.offload:
                     ae = ae.cpu()
                     self.cudagc()
 

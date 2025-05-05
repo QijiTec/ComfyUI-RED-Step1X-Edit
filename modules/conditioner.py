@@ -2,6 +2,7 @@ import torch
 from qwen_vl_utils import process_vision_info
 from transformers import (
     AutoProcessor,
+    Qwen2VLForConditionalGeneration,
     Qwen2_5_VLForConditionalGeneration,
 )
 from torchvision.transforms import ToPILImage
@@ -70,10 +71,17 @@ class Qwen25VL_7b_Embedder(torch.nn.Module):
         self.device = device
 
         print(f"Qwen25VL model run on current device: {self.device}")
+        # 根据是否有 flash_attn 来决定使用什么注意力实现
+        try:
+            import flash_attn
+            attn_implementation = "flash_attention_2"  # 用于transformers库
+        except ImportError:
+            attn_implementation = None  # 让transformers使用默认实现
+        
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype=dtype,
-            attn_implementation="flash_attention_2"
+            attn_implementation=attn_implementation
         ).to(self.device)
 
         self.model.requires_grad_(False)

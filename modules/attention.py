@@ -4,18 +4,14 @@ import torch
 import torch.nn.functional as F
 
 
-try:
-    import flash_attn
-    from flash_attn.flash_attn_interface import (
-        _flash_attn_forward,
-        flash_attn_func,
-        flash_attn_varlen_func,
-    )
-except ImportError:
-    flash_attn = None
-    flash_attn_varlen_func = None
-    _flash_attn_forward = None
-    flash_attn_func = None
+def _get_flash_attn():
+    """仅在需要时导入 flash_attn"""
+    try:
+        import flash_attn
+        from flash_attn.flash_attn_interface import flash_attn_func
+        return flash_attn_func
+    except ImportError:
+        raise ImportError("flash_attn package is not available")
 
 MEMORY_LAYOUT = {
     # flash模式:
@@ -79,11 +75,19 @@ def attention(
             q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal
         )
     elif mode == "flash":
-        assert flash_attn_func is not None, "flash_attn_func未定义"
-        assert attn_mask is None, "不支持的注意力掩码"
-        x: torch.Tensor = flash_attn_func(
-            q, k, v, dropout_p=drop_rate, causal=causal, softmax_scale=None
-        )  # type: ignore
+        try:
+            flash_attn_func = _get_flash_attn()
+            assert attn_mask is None, "不支持的注意力掩码"
+            x: torch.Tensor = flash_attn_func(
+                q, k, v, dropout_p=drop_rate, causal=causal, softmax_scale=None
+            )  # type: ignore
+        except ImportError:
+            # 如果 flash_attn 不可用，回退到 torch 模式
+            if attn_mask is not None and attn_mask.dtype != torch.bool:
+                attn_mask = attn_mask.to(q.dtype)
+            x = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=attn_mask, dropout_p=drop_rate, is_causal=causal
+            )
     elif mode == "vanilla":
         # 手动实现注意力机制
         scale_factor = 1 / math.sqrt(q.size(-1))  # 缩放因子 1/sqrt(d_k)

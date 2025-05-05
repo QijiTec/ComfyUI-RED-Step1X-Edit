@@ -1,7 +1,28 @@
 import platform
 import sys
+import importlib.util
 
 import torch
+
+def is_flash_attn_available():
+    """检查 flash_attn 是否可用"""
+    spec = importlib.util.find_spec("flash_attn")
+    return spec is not None
+
+def get_available_attention_mode(requested_mode="flash"):
+    """
+    根据请求的注意力模式和系统可用性返回实际可用的注意力模式
+    
+    Args:
+        requested_mode (str): 请求使用的注意力模式 ("flash", "torch", "vanilla")
+    
+    Returns:
+        str: 实际可用的注意力模式
+    """
+    if requested_mode == "flash" and not is_flash_attn_available():
+        print("警告：FlashAttention2 不可用，将自动切换到 torch SDPA 模式。要使用 FlashAttention2，请安装 flash-attn 包。")
+        return "torch"
+    return requested_mode
 
 
 def get_cuda_version():

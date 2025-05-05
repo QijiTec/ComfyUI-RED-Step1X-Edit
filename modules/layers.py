@@ -365,8 +365,16 @@ def attention_after_rope(q, k, v, pe):
     q, k = apply_rope(q, k, pe)
 
     from .attention import attention
+    # 获取当前的注意力模式并确保使用标准名称
+    from .model_edit import get_current_attention_mode
+    mode = get_current_attention_mode()
+    # 确保模式名称是标准的 "flash", "torch" 或 "vanilla"
+    if mode == "torch-sdpa":
+        mode = "torch"
+    elif mode not in ["flash", "torch", "vanilla"]:
+        mode = "torch"  # 默认回退到 torch 模式
 
-    x = attention(q, k, v, mode="flash")
+    x = attention(q, k, v, mode=mode)
     return x
 
 

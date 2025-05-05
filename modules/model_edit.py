@@ -8,6 +8,19 @@ from torch import Tensor, nn
 from .connector_edit import Qwen2Connector
 from .layers import DoubleStreamBlock, EmbedND, LastLayer, MLPEmbedder, SingleStreamBlock
 
+# 全局变量存储当前的注意力模式
+_current_attention_mode = "torch"  # 可选值: "flash", "torch", "vanilla"
+
+def get_current_attention_mode():
+    """获取当前的注意力模式"""
+    global _current_attention_mode
+    return _current_attention_mode
+
+def set_current_attention_mode(mode: str):
+    """设置当前的注意力模式"""
+    global _current_attention_mode
+    _current_attention_mode = mode
+
 
 @dataclass
 class Step1XParams:
@@ -30,10 +43,23 @@ class Step1XEdit(nn.Module):
     Transformer model for flow matching on sequences.
     """
 
-    def __init__(self, params: Step1XParams):
+    def __init__(self, params: Step1XParams, attention_mode: str = "flash"):
         super().__init__()
 
         self.params = params
+        # 检查是否可以使用 flash attention
+        if attention_mode == "flash":
+            try:
+                import flash_attn
+                self.attention_mode = "flash"
+            except ImportError:
+                print("警告：FlashAttention2 不可用，将自动切换到 torch SDPA 模式。要使用 FlashAttention2，请安装 flash-attn 包。")
+                self.attention_mode = "torch"
+        else:
+            self.attention_mode = attention_mode
+        
+        # 设置全局注意力模式
+        set_current_attention_mode(self.attention_mode)
         self.in_channels = params.in_channels
         self.out_channels = params.out_channels
         if params.hidden_size % params.num_heads != 0:
@@ -61,7 +87,7 @@ class Step1XEdit(nn.Module):
                     self.hidden_size,
                     self.num_heads,
                     mlp_ratio=params.mlp_ratio,
-                    qkv_bias=params.qkv_bias,
+                    qkv_bias=params.qkv_bias
                 )
                 for _ in range(params.depth)
             ]
