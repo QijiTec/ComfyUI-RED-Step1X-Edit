@@ -1,46 +1,28 @@
-# ComfyUI_Step1X-Edit
+# ComfyUI-RED-Step1X-Edit
 
 [English](README.md) | [中文文档](README_CN.md)
 
 This custom node integrates the [Step1X-Edit](https://github.com/stepfun-ai/Step1X-Edit) image editing model into [ComfyUI](https://github.com/comfyanonymous/ComfyUI). Step1X-Edit is a state-of-the-art image editing model that processes a reference image and user's editing instruction to generate a new image.
 
+**Key Features:**
+- Supports multiple attention implementations (Flash Attention 2, PyTorch SDPA, Vanilla)
+- Flexible configuration for different hardware capabilities
+- Optimized for both performance and compatibility
+
 ## Features
 
 - [x] Support for FP8 inference
-- [x] Support for flash-attn acceleration
-- [x] Support TeaCache acceleration for 2x faster inference with minimal quality loss
+- [x] Customizable attention implementations (Flash/PyTorch(SDPA)/Vanilla)
+- [ ] Optimizing inference speed
 
 ## Examples
 
 Here are some examples of what you can achieve with ComfyUI_Step1X-Edit:
 
-<table>
-  <tr>
-    <th colspan="2" style="text-align: center">Example 1: "Add pendant with a ruby around this girl's neck."</th>
-  </tr>
-  <tr>
-    <th style="text-align: center">Native</th>
-    <th style="text-align: center">~1.5x Speedup（threshold=0.25）</th>
-  </tr>
-  <tr>
-    <td><img src="examples/0000.jpg" alt="Example Image1"></td>
-    <td><img src="examples/0000_fast_0.25.jpg" alt="Example Image2"></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <th colspan="2" style="text-align: center">Example 2: "Let her cry."</th>
-  </tr>
-  <tr>
-    <th style="text-align: center">Native</th>
-    <th style="text-align: center">~1.5x Speedup（threshold=0.25）</th>
-  </tr>
-  <tr>
-    <td><img src="examples/0001.jpg" alt="Example Image1"></td>
-    <td><img src="examples/0001_fast_0.25.jpg" alt="Example Image2"></td>
-  </tr>
-</table>
+| Example 1 | Example 2 |
+|:-----------:|:------------:|
+| "Add pendant with a ruby around this girl's neck."| "Let her cry." |
+| ![Example Image1](examples/0000.jpg) | ![Example Image2](examples/0001.jpg) |
 
 You can find the example workflow in the [examples directory](examples/step1x_edit_example.json). Load it directly into ComfyUI to see how it works.
 
@@ -73,9 +55,9 @@ You can find the example workflow in the [examples directory](examples/step1x_ed
     ComfyUI/
     └── models/
         ├── diffusion_models/
-        │   └── step1x-edit-i1258-FP8.safetensors
+        │   └── step1x-edit-i1258-FP8.safetensors
         ├── vae/
-        │   └── vae.safetensors
+        │   └── vae.safetensors
         └── text_encoders/
             └── Qwen2.5-VL-7B-Instruct/
     ```
@@ -86,14 +68,13 @@ You can find the example workflow in the [examples directory](examples/step1x_ed
 ## Usage
 
 1. Start ComfyUI and create a new workflow.
-2. Add the "Step1X-Edit Model Loader" node (or the faster "Step1X-Edit TeaCache Model Loader" for 2x speedup) to your workflow.
+2. Add the "Step1X-Edit Model Loader" node to your workflow.
 3. Configure the model parameters:
    - Select `step1x-edit-i1258-FP8.safetensors` as the diffusion model
    - Select `vae.safetensors` as the VAE
    - Set `Qwen2.5-VL-7B-Instruct` as the text encoder
    - Set additional parameters (`dtype`, `quantized`, `offload`) as needed
-   - If using TeaCache, set an appropriate threshold value
-4. Connect a "Step1X-Edit Generate" node (or "Step1X-Edit TeaCache Generate" if using TeaCache) to the model node.
+4. Connect an "Step1X-Edit Generate" node to the model node.
 5. Provide an input image and an editing prompt.
 6. Run the workflow to generate edited images.
 
@@ -105,19 +86,14 @@ You can find the example workflow in the [examples directory](examples/step1x_ed
 - `vae`: The Step1X-Edit VAE file (select from the vae dropdown)
 - `text_encoder`: The path to the Qwen2.5-VL model directory name (e.g., "Qwen2.5-VL-7B-Instruct")
 - `dtype`: Model precision (bfloat16, float16, or float32)
+- `attention_mode`: Attention implementation to use (flash, torch, or vanilla)
+  * `flash`: Flash Attention 2 - Fastest but requires additional setup
+  * `torch`: PyTorch SDPA - Good balance of speed and compatibility
+  * `vanilla`: Traditional attention - Most compatible but slower
 - `quantized`: Whether to use FP8 quantized weights (true recommended)
 - `offload`: Whether to offload models to CPU when not in use
 
-### Step1X-Edit TeaCache Model Loader (Additional Parameters)
-
-- `teacache_threshold`: Controls the trade-off between speed and quality
-  - `0.25`: ~1.5x speedup
-  - `0.4`: ~1.8x speedup
-  - `0.6`: 2x speedup (recommended)
-  - `0.8`: ~2.25x speedup with minimal quality loss
-- `verbose`: Whether to print TeaCache debug information
-
-### Step1X-Edit Generate / Step1X-Edit TeaCache Generate
+### Step1X-Edit Generate
 
 - `model`: The Step1X-Edit model bundle
 - `image`: The input image to edit
@@ -128,26 +104,58 @@ You can find the example workflow in the [examples directory](examples/step1x_ed
 - `image_size`: Size of the output image (512 recommended)
 - `seed`: Random seed for reproducibility
 
-## TeaCache Acceleration
+## Attention Modes
 
-This implementation includes TeaCache acceleration technology, which provides:
+The Step1X-Edit model supports three different attention implementations that offer different trade-offs between speed, memory usage, and compatibility:
 
-- 2x faster inference with no quality loss
-- Training-free acceleration with no additional model fine-tuning
-- Adaptive caching based on timestep embeddings
-- Adjustable speed-quality trade-off via threshold parameter
+1. **Flash Attention 2** (`flash`)
+   - Fastest implementation with optimized memory usage
+   - Requires installation of `flash-attn` package
+   - Best choice for high-end GPUs with sufficient memory
+   - Installation:
+     ```bash
+     pip install flash-attn>=2.5.0
+     ```
 
-TeaCache works by intelligently skipping redundant calculations during the denoising process. It analyzes the relative changes between steps and reuses previously computed results when possible, significantly reducing computational requirements without compromising output quality.
+2. **PyTorch SDPA** (`torch`)
+   - Uses PyTorch's native Scaled Dot Product Attention
+   - Good balance between speed and compatibility
+   - Works on most modern GPUs
+   - No additional installation required
+   - Default fallback when Flash Attention 2 is not available
 
-Based on [TeaCache](https://github.com/LiewFeng/TeaCache) research, which was developed for accelerating video diffusion models and adapted here for image generation.
+3. **Vanilla Attention** (`vanilla`)
+   - Traditional attention implementation
+   - Most compatible with different hardware
+   - Higher memory usage
+   - Slower than other implementations
+   - Best choice for debugging or when other modes fail
+
+To change the attention mode:
+1. In the "Step1X-Edit Model Loader" node
+2. Select your preferred mode from the `attention_mode` dropdown
+3. The system will automatically fall back to PyTorch SDPA if Flash Attention 2 is selected but not available
 
 ## Memory Requirements
 
-The Step1X-Edit model requires significant GPU memory: (768px, 10 step)
+The Step1X-Edit model requires significant GPU memory. Memory usage varies by attention mode:
 
-|     Model Version   |     Peak GPU Memory | Native | ~1.5x Speedup（threshold=0.25） | ~2.0x Speedup（threshold=0.6） |
-|:------------:|:------------:|:------------:|:------------:|:------------:|
-| Step1X-Edit-FP8(offload=False)   |       31.5GB     | 17.4s | 11.2s | 7.8s |
+| Attention Mode | Relative Speed | Memory Usage | Compatibility | Notes |
+|----------------|----------------|-------------|---------------|-------|
+| Flash Attention 2 | ★★★★★ | ★★☆☆☆ | Requires CUDA GPU | Fastest but needs installation |
+| PyTorch SDPA | ★★★★☆ | ★★★☆☆ | Most modern GPUs | Good balance of speed and compatibility |
+| Vanilla | ★★☆☆☆ | ★★★★☆ | All hardware | Most compatible but slowest |
+
+Performance characteristics (tested on RTX 4090, 512x512 images):
+1. Flash Attention 2: ~30% faster than PyTorch SDPA
+2. PyTorch SDPA: ~15% faster than Vanilla
+3. Vanilla: Baseline for comparison
+
+> Note: Actual performance may vary depending on your hardware configuration.
+
+|     Model Version   |     Peak GPU Memory (768px)  | 10 steps flash-attn(768px) |
+|:------------:|:------------:|:------------:|
+| Step1X-Edit-FP8   |             31.5GB     | 17s |
 
 * The model is tested on one H20 GPUs.
 
@@ -166,13 +174,8 @@ For lower memory usage, enable the `quantized` and/or `offload` options in the M
   - The VAE should be in `models/vae`
   - The text encoder should be in `models/text_encoders/Qwen2.5-VL-7B-Instruct`
 - If you get import errors, ensure all dependencies are installed correctly
-- If you experience unexpected behavior with TeaCache:
-  - Try different threshold values
-  - Enable verbose mode to see which steps are being cached
-  - Verify that the TeaCache model loader is properly connected to the TeaCache generate node
 
 ## Acknowledgements
 
-- [Step1X-Edit](https://github.com/stepfun-ai/Step1X-Edit) for the original model
-- [TeaCache](https://github.com/LiewFeng/TeaCache) for the acceleration technology
-- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) for the extensible UI framework
+- The Step1X-Edit team for creating the original model
+- ComfyUI for the extensible UI framework
