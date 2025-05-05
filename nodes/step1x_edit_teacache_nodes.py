@@ -6,13 +6,13 @@ import math
 from einops import rearrange, repeat
 from torchvision.transforms import functional as F
 
-from ..utils.model_loader import Step1XEditModelBundle
+from ..utils.model_loader_teacache import Step1XEditTeaCacheModelBundle
 from ..utils.sampling import get_schedule
 import folder_paths
 
 
-class Step1XEditModelLoader:
-    """Node for loading the Step1X-Edit model."""
+class Step1XEditTeaCacheModelLoader:
+    """Node for loading the Step1X-Edit model with TeaCache acceleration."""
 
     @classmethod
     def INPUT_TYPES(s):
@@ -23,7 +23,13 @@ class Step1XEditModelLoader:
                 "text_encoder": (os.listdir(folder_paths.get_folder_paths("text_encoders")[0]), {"default": "Qwen2.5-VL-7B-Instruct"}),
                 "dtype": (["bfloat16", "float16", "float32"], {"default": "bfloat16"}),
                 "quantized": ("BOOLEAN", {"default": True}),
-                "offload": ("BOOLEAN", {"default": False})
+                "offload": ("BOOLEAN", {"default": False}),
+                "teacache_threshold": (["0.25", "0.4", "0.6", "0.8"], {
+                    "default": "0.6",
+                    "label": "TeaCache Threshold",
+                    "info": "Higher values = faster but potential quality loss. 0.6 is recommended for 2x speedup."
+                }),
+                "verbose": ("BOOLEAN", {"default": False, "label": "Verbose Output"})
             }
         }
 
@@ -32,8 +38,8 @@ class Step1XEditModelLoader:
     FUNCTION = "load_model"
     CATEGORY = "Step1X-Edit"
 
-    def load_model(self, diffusion_model, vae, text_encoder, dtype, quantized, offload):
-        """Load the Step1X-Edit model components."""
+    def load_model(self, diffusion_model, vae, text_encoder, dtype, quantized, offload, teacache_threshold, verbose):
+        """Load the Step1X-Edit model components with TeaCache acceleration."""
         dit_path = folder_paths.get_full_path("diffusion_models", diffusion_model)
         ae_path = folder_paths.get_full_path("vae", vae)
         qwen2vl_model_path = os.path.join(folder_paths.get_folder_paths("text_encoders")[0], text_encoder)
@@ -49,8 +55,16 @@ class Step1XEditModelLoader:
         # Determine device
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Create model bundle
-        model = Step1XEditModelBundle(device=device, dtype=torch_dtype)
+        # Convert threshold to float
+        threshold = float(teacache_threshold)
+
+        # Create model bundle with TeaCache
+        model = Step1XEditTeaCacheModelBundle(
+            device=device,
+            dtype=torch_dtype,
+            rel_l1_thresh=threshold,
+            verbose=verbose
+        )
         model.set_quantized(quantized)
         model.set_offload(offload)
 
@@ -63,13 +77,13 @@ class Step1XEditModelLoader:
         )
 
         if not success:
-            raise RuntimeError("Failed to load Step1X-Edit models. Please check paths and ensure all dependencies are installed.")
+            raise RuntimeError("Failed to load Step1X-Edit models with TeaCache. Please check paths and ensure all dependencies are installed.")
 
         return (model,)
 
 
-class Step1XEditGenerateNode:
-    """Node for generating images using Step1X-Edit."""
+class Step1XEditTeaCacheGenerateNode:
+    """Node for generating images using Step1X-Edit with TeaCache acceleration."""
 
     @classmethod
     def INPUT_TYPES(s):
@@ -170,6 +184,9 @@ class Step1XEditGenerateNode:
         dit = model.dit
         if model.offload:
             dit = dit.to(device)
+
+        # Reset TeaCache for the new denoising process
+        model.reset_teacache(len(timesteps)-1)
 
         for t_curr, t_prev in itertools.pairwise(timesteps):
             if img.shape[0] == 1 and cfg_guidance != -1:

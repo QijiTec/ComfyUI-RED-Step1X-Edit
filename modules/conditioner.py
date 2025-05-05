@@ -2,7 +2,6 @@ import torch
 from qwen_vl_utils import process_vision_info
 from transformers import (
     AutoProcessor,
-    Qwen2VLForConditionalGeneration,
     Qwen2_5_VLForConditionalGeneration,
 )
 from torchvision.transforms import ToPILImage

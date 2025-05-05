@@ -7,16 +7,40 @@ This custom node integrates the [Step1X-Edit](https://github.com/stepfun-ai/Step
 ## Features
 
 - [x] Support for FP8 inference
-- [ ] Optimizing inference speed
+- [x] Support for flash-attn acceleration
+- [x] Support TeaCache acceleration for 2x faster inference with minimal quality loss
 
 ## Examples
 
 Here are some examples of what you can achieve with ComfyUI_Step1X-Edit:
 
-| Example 1 | Example 2 |
-|:-----------:|:------------:|
-| "Add pendant with a ruby around this girl's neck."| "Let her cry." |
-| ![Example Image1](examples/0000.jpg) | ![Example Image2](examples/0001.jpg) |
+<table>
+  <tr>
+    <th colspan="2" style="text-align: center">Example 1: "Add pendant with a ruby around this girl's neck."</th>
+  </tr>
+  <tr>
+    <th style="text-align: center">Native</th>
+    <th style="text-align: center">~1.5x Speedup（threshold=0.25）</th>
+  </tr>
+  <tr>
+    <td><img src="examples/0000.jpg" alt="Example Image1"></td>
+    <td><img src="examples/0000_fast_0.25.jpg" alt="Example Image2"></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <th colspan="2" style="text-align: center">Example 2: "Let her cry."</th>
+  </tr>
+  <tr>
+    <th style="text-align: center">Native</th>
+    <th style="text-align: center">~1.5x Speedup（threshold=0.25）</th>
+  </tr>
+  <tr>
+    <td><img src="examples/0001.jpg" alt="Example Image1"></td>
+    <td><img src="examples/0001_fast_0.25.jpg" alt="Example Image2"></td>
+  </tr>
+</table>
 
 You can find the example workflow in the [examples directory](examples/step1x_edit_example.json). Load it directly into ComfyUI to see how it works.
 
@@ -49,9 +73,9 @@ You can find the example workflow in the [examples directory](examples/step1x_ed
     ComfyUI/
     └── models/
         ├── diffusion_models/
-        │   └── step1x-edit-i1258-FP8.safetensors
+        │   └── step1x-edit-i1258-FP8.safetensors
         ├── vae/
-        │   └── vae.safetensors
+        │   └── vae.safetensors
         └── text_encoders/
             └── Qwen2.5-VL-7B-Instruct/
     ```
@@ -62,13 +86,14 @@ You can find the example workflow in the [examples directory](examples/step1x_ed
 ## Usage
 
 1. Start ComfyUI and create a new workflow.
-2. Add the "Step1X-Edit Model Loader" node to your workflow.
+2. Add the "Step1X-Edit Model Loader" node (or the faster "Step1X-Edit TeaCache Model Loader" for 2x speedup) to your workflow.
 3. Configure the model parameters:
    - Select `step1x-edit-i1258-FP8.safetensors` as the diffusion model
    - Select `vae.safetensors` as the VAE
    - Set `Qwen2.5-VL-7B-Instruct` as the text encoder
    - Set additional parameters (`dtype`, `quantized`, `offload`) as needed
-4. Connect an "Step1X-Edit Generate" node to the model node.
+   - If using TeaCache, set an appropriate threshold value
+4. Connect a "Step1X-Edit Generate" node (or "Step1X-Edit TeaCache Generate" if using TeaCache) to the model node.
 5. Provide an input image and an editing prompt.
 6. Run the workflow to generate edited images.
 
@@ -83,7 +108,16 @@ You can find the example workflow in the [examples directory](examples/step1x_ed
 - `quantized`: Whether to use FP8 quantized weights (true recommended)
 - `offload`: Whether to offload models to CPU when not in use
 
-### Step1X-Edit Generate
+### Step1X-Edit TeaCache Model Loader (Additional Parameters)
+
+- `teacache_threshold`: Controls the trade-off between speed and quality
+  - `0.25`: ~1.5x speedup
+  - `0.4`: ~1.8x speedup
+  - `0.6`: 2x speedup (recommended)
+  - `0.8`: ~2.25x speedup with minimal quality loss
+- `verbose`: Whether to print TeaCache debug information
+
+### Step1X-Edit Generate / Step1X-Edit TeaCache Generate
 
 - `model`: The Step1X-Edit model bundle
 - `image`: The input image to edit
@@ -94,13 +128,26 @@ You can find the example workflow in the [examples directory](examples/step1x_ed
 - `image_size`: Size of the output image (512 recommended)
 - `seed`: Random seed for reproducibility
 
+## TeaCache Acceleration
+
+This implementation includes TeaCache acceleration technology, which provides:
+
+- 2x faster inference with no quality loss
+- Training-free acceleration with no additional model fine-tuning
+- Adaptive caching based on timestep embeddings
+- Adjustable speed-quality trade-off via threshold parameter
+
+TeaCache works by intelligently skipping redundant calculations during the denoising process. It analyzes the relative changes between steps and reuses previously computed results when possible, significantly reducing computational requirements without compromising output quality.
+
+Based on [TeaCache](https://github.com/LiewFeng/TeaCache) research, which was developed for accelerating video diffusion models and adapted here for image generation.
+
 ## Memory Requirements
 
-The Step1X-Edit model requires significant GPU memory:
+The Step1X-Edit model requires significant GPU memory: (768px, 10 step)
 
-|     Model Version   |     Peak GPU Memory (768px)  | 10 steps flash-attn(768px) |
-|:------------:|:------------:|:------------:|
-| Step1X-Edit-FP8   |             31.5GB     | 17s |
+|     Model Version   |     Peak GPU Memory | Native | ~1.5x Speedup（threshold=0.25） | ~2.0x Speedup（threshold=0.6） |
+|:------------:|:------------:|:------------:|:------------:|:------------:|
+| Step1X-Edit-FP8(offload=False)   |       31.5GB     | 17.4s | 11.2s | 7.8s |
 
 * The model is tested on one H20 GPUs.
 
@@ -119,8 +166,13 @@ For lower memory usage, enable the `quantized` and/or `offload` options in the M
   - The VAE should be in `models/vae`
   - The text encoder should be in `models/text_encoders/Qwen2.5-VL-7B-Instruct`
 - If you get import errors, ensure all dependencies are installed correctly
+- If you experience unexpected behavior with TeaCache:
+  - Try different threshold values
+  - Enable verbose mode to see which steps are being cached
+  - Verify that the TeaCache model loader is properly connected to the TeaCache generate node
 
 ## Acknowledgements
 
-- The Step1X-Edit team for creating the original model
-- ComfyUI for the extensible UI framework
+- [Step1X-Edit](https://github.com/stepfun-ai/Step1X-Edit) for the original model
+- [TeaCache](https://github.com/LiewFeng/TeaCache) for the acceleration technology
+- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) for the extensible UI framework
